@@ -1,0 +1,6 @@
+[
+  { "word": "كتاب", "translations": { "en": "book", "fr": "livre", "es": "libro", "de": "Buch" }, "difficulty": 1, "category": "أساسيات", "example": "هذا كتاب مفيد." },
+  { "word": "بيت", "translations": { "en": "house", "fr": "maison", "es": "casa", "de": "Haus" }, "difficulty": 1, "category": "منزل" },
+  { "word": "قطة", "translations": { "en": "cat", "fr": "chat", "es": "gato", "de": "Katze" }, "difficulty": 1, "category": "حيوانات" },
+  { "word": "شمس", "translations": { "en": "sun", "fr": "soleil", "es": "sol", "de": "Sonne" }, "difficulty": 2, "category": "طبيعة" }
+]
