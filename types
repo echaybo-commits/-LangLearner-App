@@ -1,0 +1,40 @@
+export interface WordEntry {
+  word: string;
+  translations: {
+    en: string;
+    fr: string;
+    es: string;
+    de: string;
+    ar?: string;
+  };
+  difficulty: 1 | 2 | 3 | 4 | 5;
+  category?: string;
+  example?: string;
+}
+
+export interface UserProgress {
+  xp: number;
+  hearts: number;
+  level: number;
+  badges: string[];
+  currentPath: string;
+  lessonsCompleted: string[];
+  stats: {
+    totalCorrect: number;
+    totalWrong: number;
+    streak: number;
+  };
+  learnedWords: string[];
+}
+
+export interface Lesson {
+  id: string;
+  title: string;
+  words: string[];
+  unlockLevel: number;
+}
+
+export interface LearningPath {
+  lang: string;
+  lessons: Lesson[];
+}
