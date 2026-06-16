@@ -1,0 +1,4 @@
+[
+  { "word": "book", "translations": { "ar": "كتاب", "fr": "livre", "es": "libro", "de": "Buch" }, "difficulty": 1, "category": "Basics" },
+  { "word": "house", "translations": { "ar": "بيت", "fr": "maison", "es": "casa", "de": "Haus" }, "difficulty": 1, "category": "Home" }
+]
