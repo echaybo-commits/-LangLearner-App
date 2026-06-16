@@ -1,0 +1,697 @@
+# ============================================================
+# تعليمات سريعة لإنشاء المشروع من هذا الكود (على هاتفك أو جهازك)
+# 1. أنشئ مجلداً باسم "lingo-app" (أو أي اسم).
+# 2. داخل المجلد، أنشئ الملفات التالية بوضع المحتوى المخصص لكل منها:
+#    - next.config.js
+#    - package.json
+#    - tsconfig.json (اختياري ولكن يفضل)
+#    - app/layout.tsx
+#    - app/page.tsx
+#    - app/path/[lang]/page.tsx
+#    - app/lesson/[lang]/[lessonId]/page.tsx
+#    - components/Exercise.tsx
+#    - components/PathMap.tsx
+#    - contexts/UserContext.tsx
+#    - lib/dictionary.ts
+#    - types/index.ts
+#    - data/words/ar.json (ونفس الشيء لـ en, fr, es, de)
+# 3. قم بتشغيل npm install ثم npm run dev.
+# ============================================================
+
+// ============================================================
+// File: next.config.js
+// ============================================================
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  output: 'export',
+  images: { unoptimized: true },
+  // إذا أردت استخدام rewrites لـ API proxy يمكنك إضافتها، لكننا نستخدم الجلب المباشر.
+};
+
+export default nextConfig;
+
+// ============================================================
+// File: package.json
+// ============================================================
+{
+  "name": "lingo-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "14.0.4",
+    "react": "^18",
+    "react-dom": "^18",
+    "framer-motion": "^10.16.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10",
+    "postcss": "^8",
+    "tailwindcss": "^3",
+    "typescript": "^5"
+  }
+}
+
+// ============================================================
+// File: tsconfig.json
+// ============================================================
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [{ "name": "next" }],
+    "paths": { "@/*": ["./*"] }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+
+// ============================================================
+// File: types/index.ts
+// ============================================================
+export interface WordEntry {
+  word: string;
+  translations: {
+    en: string;
+    fr: string;
+    es: string;
+    de: string;
+  };
+  difficulty: 1 | 2 | 3 | 4 | 5;
+  category?: string;
+  example?: string;
+}
+
+export interface UserProgress {
+  xp: number;
+  hearts: number;
+  level: number;
+  badges: string[];
+  currentPath: string; // معرف المسار الحالي (مثل 'ar')
+  lessonsCompleted: string[]; // معرفات الدروس المكتملة
+  stats: {
+    totalCorrect: number;
+    totalWrong: number;
+    streak: number;
+  };
+  learnedWords: string[]; // الكلمات التي تمت دراستها بنجاح
+}
+
+export interface Lesson {
+  id: string;
+  title: string;
+  words: string[]; // كلمات من المعجم
+  unlockLevel: number; // المستوى المطلوب لفتح الدرس
+}
+
+export interface LearningPath {
+  lang: string;
+  lessons: Lesson[];
+}
+
+// ============================================================
+// File: data/words/ar.json (نموذج صغير، أضف الباقي بنفس الهيكل)
+// ============================================================
+[
+  { "word": "كتاب", "translations": { "en": "book", "fr": "livre", "es": "libro", "de": "Buch" }, "difficulty": 1, "category": "أساسيات", "example": "هذا كتاب مفيد." },
+  { "word": "بيت", "translations": { "en": "house", "fr": "maison", "es": "casa", "de": "Haus" }, "difficulty": 1, "category": "منزل" },
+  { "word": "قطة", "translations": { "en": "cat", "fr": "chat", "es": "gato", "de": "Katze" }, "difficulty": 1, "category": "حيوانات" },
+  { "word": "شمس", "translations": { "en": "sun", "fr": "soleil", "es": "sol", "de": "Sonne" }, "difficulty": 2, "category": "طبيعة" }
+]
+
+// ============================================================
+// File: data/words/en.json (نفس الهيكل، لكن الكلمات إنجليزية مع ترجمات)
+// ============================================================
+[
+  { "word": "book", "translations": { "ar": "كتاب", "fr": "livre", "es": "libro", "de": "Buch" }, "difficulty": 1, "category": "Basics" },
+  { "word": "house", "translations": { "ar": "بيت", "fr": "maison", "es": "casa", "de": "Haus" }, "difficulty": 1, "category": "Home" }
+]
+
+// ============================================================
+// File: data/words/fr.json, data/words/es.json, data/words/de.json
+// (أضفها بنفس النمط، مع ترجمات للغات الأخرى)
+// ============================================================
+
+// ============================================================
+// File: lib/dictionary.ts
+// ============================================================
+import { WordEntry } from '@/types';
+
+// تحميل المعجم الأساسي (يُستدعى عند أول استخدام للغة)
+const coreDicts: Record<string, WordEntry[]> = {};
+
+export async function loadCoreDictionary(lang: string): Promise<WordEntry[]> {
+  if (coreDicts[lang]) return coreDicts[lang];
+  try {
+    const res = await fetch(`/data/words/${lang}.json`);
+    const data = await res.json();
+    coreDicts[lang] = data;
+    return data;
+  } catch (e) {
+    console.error('Failed to load core dictionary for', lang);
+    return [];
+  }
+}
+
+// البحث في المعجم الأساسي
+export function searchInCore(lang: string, word: string): WordEntry | undefined {
+  const dict = coreDicts[lang] || [];
+  return dict.find(entry => entry.word.toLowerCase() === word.toLowerCase());
+}
+
+// جلب كلمة من Wiktionary (توسيع ديناميكي)
+export async function fetchFromWiktionary(word: string, sourceLang: string, targetLang: string): Promise<WordEntry | null> {
+  try {
+    // نستخدم API Wiktionary للغة المصدر (مثلاً en.wiktionary.org للكلمات الإنجليزية)
+    const url = `https://${sourceLang}.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(word)}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    // نحاول استخراج الترجمة للغة الهدف من البيانات (هذا مثال مبسط، قد تحتاج إلى تحليل أكثر تعقيداً)
+    // في هذا النموذج سنفترض أننا نستخرج الترجمة من قسم "translations" إن وجد.
+    // للتبسيط، سنعيد كائن WordEntry مع ترجمة وهمية، لكن يمكنك تطوير المنطق.
+    // هنا نكتفي بإرجاع null ونعتمد على المعجم الأساسي أو نضيف ترجمة يدوية.
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// دالة للبحث الشامل: أولاً في الأساسي، ثم الموسع (localStorage)، ثم Wiktionary
+export async function lookupWord(word: string, sourceLang: string, targetLang: string): Promise<WordEntry | null> {
+  // 1. البحث في الأساسي
+  const core = searchInCore(sourceLang, word);
+  if (core) return core;
+
+  // 2. البحث في localStorage (الموسع)
+  const stored = localStorage.getItem(`extended_${sourceLang}_${word}`);
+  if (stored) {
+    try {
+      return JSON.parse(stored) as WordEntry;
+    } catch { /* ignore */ }
+  }
+
+  // 3. جلب من Wiktionary
+  const fromWiki = await fetchFromWiktionary(word, sourceLang, targetLang);
+  if (fromWiki) {
+    localStorage.setItem(`extended_${sourceLang}_${word}`, JSON.stringify(fromWiki));
+    return fromWiki;
+  }
+
+  return null;
+}
+
+// ============================================================
+// File: contexts/UserContext.tsx
+// ============================================================
+'use client';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { UserProgress } from '@/types';
+
+const defaultProgress: UserProgress = {
+  xp: 0,
+  hearts: 5,
+  level: 1,
+  badges: [],
+  currentPath: '',
+  lessonsCompleted: [],
+  stats: { totalCorrect: 0, totalWrong: 0, streak: 0 },
+  learnedWords: [],
+};
+
+interface UserContextType {
+  progress: UserProgress;
+  updateProgress: (fn: (p: UserProgress) => UserProgress) => void;
+  addXP: (amount: number) => void;
+  loseHeart: () => void;
+  completeLesson: (lessonId: string) => void;
+  unlockBadge: (badgeId: string) => void;
+}
+
+const UserContext = createContext<UserContextType | null>(null);
+
+export function UserProvider({ children }: { children: ReactNode }) {
+  const [progress, setProgress] = useState<UserProgress>(defaultProgress);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('userProgress');
+    if (stored) {
+      try {
+        setProgress(JSON.parse(stored));
+      } catch { /* ignore */ }
+    }
+  }, []);
+
+  const updateProgress = (fn: (p: UserProgress) => UserProgress) => {
+    setProgress(prev => {
+      const newProgress = fn(prev);
+      localStorage.setItem('userProgress', JSON.stringify(newProgress));
+      return newProgress;
+    });
+  };
+
+  const addXP = (amount: number) => {
+    updateProgress(p => {
+      const newXp = p.xp + amount;
+      const newLevel = Math.floor(newXp / 100) + 1;
+      return { ...p, xp: newXp, level: newLevel };
+    });
+  };
+
+  const loseHeart = () => {
+    updateProgress(p => {
+      const newHearts = Math.max(0, p.hearts - 1);
+      return { ...p, hearts: newHearts };
+    });
+  };
+
+  const completeLesson = (lessonId: string) => {
+    updateProgress(p => {
+      if (p.lessonsCompleted.includes(lessonId)) return p;
+      return { ...p, lessonsCompleted: [...p.lessonsCompleted, lessonId] };
+    });
+  };
+
+  const unlockBadge = (badgeId: string) => {
+    updateProgress(p => {
+      if (p.badges.includes(badgeId)) return p;
+      return { ...p, badges: [...p.badges, badgeId] };
+    });
+  };
+
+  return (
+    <UserContext.Provider value={{ progress, updateProgress, addXP, loseHeart, completeLesson, unlockBadge }}>
+      {children}
+    </UserContext.Provider>
+  );
+}
+
+export function useUser() {
+  const ctx = useContext(UserContext);
+  if (!ctx) throw new Error('useUser must be used within UserProvider');
+  return ctx;
+}
+
+// ============================================================
+// File: app/layout.tsx
+// ============================================================
+import type { Metadata } from 'next';
+import { UserProvider } from '@/contexts/UserContext';
+import './globals.css';
+
+export const metadata: Metadata = {
+  title: 'Lingo Game',
+  description: 'تعلم اللغات بطريقة ممتعة',
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="ar" dir="rtl">
+      <body className="bg-gradient-to-b from-orange-50 to-blue-50 min-h-screen">
+        <UserProvider>
+          {children}
+        </UserProvider>
+      </body>
+    </html>
+  );
+}
+
+// ============================================================
+// File: app/globals.css (ضع هذا الكود في ملف globals.css)
+// ============================================================
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* إعدادات إضافية للغة العربية */
+.rtl {
+  direction: rtl;
+}
+
+/* ============================================================
+// File: app/page.tsx (شاشة اختيار اللغة)
+// ============================================================
+'use client';
+import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+
+const languages = [
+  { code: 'ar', name: 'العربية', flag: '🇸🇦' },
+  { code: 'en', name: 'English', flag: '🇬🇧' },
+  { code: 'fr', name: 'Français', flag: '🇫🇷' },
+  { code: 'es', name: 'Español', flag: '🇪🇸' },
+  { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
+];
+
+export default function HomePage() {
+  const router = useRouter();
+
+  const selectLanguage = (lang: string) => {
+    router.push(`/path/${lang}`);
+  };
+
+  return (
+    <main className="p-6 max-w-md mx-auto">
+      <h1 className="text-4xl font-bold text-center text-blue-800 mb-8">اختر لغتك</h1>
+      <div className="grid grid-cols-2 gap-4">
+        {languages.map((lang) => (
+          <motion.button
+            key={lang.code}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => selectLanguage(lang.code)}
+            className="bg-white p-6 rounded-2xl shadow-lg flex flex-col items-center hover:shadow-xl transition"
+          >
+            <span className="text-4xl">{lang.flag}</span>
+            <span className="mt-2 font-semibold">{lang.name}</span>
+          </motion.button>
+        ))}
+      </div>
+    </main>
+  );
+}
+
+// ============================================================
+// File: app/path/[lang]/page.tsx (خريطة المسارات)
+// ============================================================
+'use client';
+import { useParams, useRouter } from 'next/navigation';
+import { useUser } from '@/contexts/UserContext';
+import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
+import { Lesson, LearningPath } from '@/types';
+import PathMap from '@/components/PathMap';
+
+// بيانات مسارات التعلم (يمكن نقلها إلى ملف منفصل)
+const learningPaths: Record<string, Lesson[]> = {
+  ar: [
+    { id: 'ar-1', title: 'التحيات', words: ['مرحبا', 'سلام', 'شكرا'], unlockLevel: 1 },
+    { id: 'ar-2', title: 'الأرقام', words: ['واحد', 'اثنان', 'ثلاثة'], unlockLevel: 2 },
+    { id: 'ar-3', title: 'العائلة', words: ['أب', 'أم', 'أخ'], unlockLevel: 3 },
+  ],
+  en: [
+    { id: 'en-1', title: 'Greetings', words: ['hello', 'goodbye', 'thank you'], unlockLevel: 1 },
+    { id: 'en-2', title: 'Numbers', words: ['one', 'two', 'three'], unlockLevel: 2 },
+  ],
+  // أضف للغات الأخرى...
+};
+
+export default function PathPage() {
+  const { lang } = useParams() as { lang: string };
+  const router = useRouter();
+  const { progress } = useUser();
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+
+  useEffect(() => {
+    setLessons(learningPaths[lang] || []);
+  }, [lang]);
+
+  const handleLessonClick = (lessonId: string) => {
+    router.push(`/lesson/${lang}/${lessonId}`);
+  };
+
+  return (
+    <main className="p-4 max-w-md mx-auto">
+      <h1 className="text-2xl font-bold text-center mb-6">مسار التعلم - {lang.toUpperCase()}</h1>
+      <PathMap lessons={lessons} currentLevel={progress.level} completedIds={progress.lessonsCompleted} onSelect={handleLessonClick} />
+    </main>
+  );
+}
+
+// ============================================================
+// File: components/PathMap.tsx
+// ============================================================
+import { motion } from 'framer-motion';
+import { Lesson } from '@/types';
+
+interface PathMapProps {
+  lessons: Lesson[];
+  currentLevel: number;
+  completedIds: string[];
+  onSelect: (id: string) => void;
+}
+
+export default function PathMap({ lessons, currentLevel, completedIds, onSelect }: PathMapProps) {
+  return (
+    <div className="flex flex-col items-center space-y-4">
+      {lessons.map((lesson, index) => {
+        const isUnlocked = lesson.unlockLevel <= currentLevel;
+        const isCompleted = completedIds.includes(lesson.id);
+        return (
+          <motion.div
+            key={lesson.id}
+            className={`w-full max-w-xs p-4 rounded-2xl shadow-md cursor-pointer ${
+              isCompleted ? 'bg-green-100 border-2 border-green-500' :
+              isUnlocked ? 'bg-blue-100 border-2 border-blue-400 hover:shadow-lg' :
+              'bg-gray-200 opacity-60 cursor-not-allowed'
+            }`}
+            whileHover={{ scale: isUnlocked ? 1.02 : 1 }}
+            onClick={() => isUnlocked && onSelect(lesson.id)}
+          >
+            <h3 className="font-bold text-lg">{lesson.title}</h3>
+            <p className="text-sm">{isCompleted ? '✅ تم' : isUnlocked ? '🔓 مفتوح' : '🔒 مقفل'}</p>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================================================
+// File: app/lesson/[lang]/[lessonId]/page.tsx (شاشة الدرس)
+// ============================================================
+'use client';
+import { useParams, useRouter } from 'next/navigation';
+import { useUser } from '@/contexts/UserContext';
+import { useState, useEffect } from 'react';
+import { WordEntry } from '@/types';
+import { loadCoreDictionary, lookupWord } from '@/lib/dictionary';
+import Exercise from '@/components/Exercise';
+
+// دالة مساعدة لتوليد أسئلة من قائمة الكلمات
+function generateQuestions(words: string[], lang: string, targetLang: string): any[] {
+  // هنا نقوم بتحويل الكلمات إلى أسئلة (اختيار من متعدد)
+  // نأخذ أول 5 كلمات مثلاً
+  return words.slice(0, 5).map(word => ({
+    word,
+    correctTranslation: word, // سنقوم باستبدالها بالترجمة الفعلية لاحقًا
+    options: [word, 'خيار1', 'خيار2', 'خيار3'], // مؤقت
+  }));
+}
+
+export default function LessonPage() {
+  const { lang, lessonId } = useParams() as { lang: string; lessonId: string };
+  const router = useRouter();
+  const { progress, addXP, loseHeart, completeLesson, updateProgress } = useUser();
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [score, setScore] = useState(0);
+  const [finished, setFinished] = useState(false);
+
+  // تحميل الدرس وبياناته
+  useEffect(() => {
+    async function loadLesson() {
+      // نبحث عن الدرس في learningPaths
+      const allPaths = {
+        ar: [
+          { id: 'ar-1', title: 'التحيات', words: ['مرحبا', 'سلام', 'شكرا'], unlockLevel: 1 },
+          { id: 'ar-2', title: 'الأرقام', words: ['واحد', 'اثنان', 'ثلاثة'], unlockLevel: 2 },
+        ],
+        en: [
+          { id: 'en-1', title: 'Greetings', words: ['hello', 'goodbye', 'thank you'], unlockLevel: 1 },
+        ],
+        // ... أضف الباقي
+      };
+      const lessons = allPaths[lang] || [];
+      const lesson = lessons.find(l => l.id === lessonId);
+      if (!lesson) {
+        router.push(`/path/${lang}`);
+        return;
+      }
+
+      // تحميل المعجم الأساسي للغة
+      await loadCoreDictionary(lang);
+
+      // بناء الأسئلة من كلمات الدرس
+      const qs = await Promise.all(lesson.words.map(async (w) => {
+        // البحث عن الكلمة في المعجم
+        const entry = await lookupWord(w, lang, 'en'); // نستخدم الإنجليزية كهدف مؤقت، يمكن تعديله
+        const correctTranslation = entry?.translations?.en || w;
+        // توليد خيارات عشوائية (سنستخدم كلمات عشوائية من المعجم)
+        const allWords = Object.values(coreDicts).flat(); // مبسط
+        const randomOptions = allWords
+          .filter(e => e.word !== w)
+          .sort(() => Math.random() - 0.5)
+          .slice(0, 3)
+          .map(e => e.translations?.en || e.word);
+        const options = [correctTranslation, ...randomOptions].sort(() => Math.random() - 0.5);
+        return {
+          word: w,
+          correctTranslation,
+          options,
+        };
+      }));
+
+      setQuestions(qs);
+    }
+    loadLesson();
+  }, [lang, lessonId, router]);
+
+  const handleAnswer = (isCorrect: boolean) => {
+    if (isCorrect) {
+      addXP(10);
+      setScore(prev => prev + 1);
+    } else {
+      loseHeart();
+    }
+
+    // الانتقال للسؤال التالي أو النهاية
+    if (currentIndex + 1 < questions.length) {
+      setCurrentIndex(prev => prev + 1);
+    } else {
+      setFinished(true);
+      // إكمال الدرس
+      completeLesson(lessonId);
+      // تحديث الكلمات المتعلمة (نضيف كلمات الدرس)
+      const lessonWords = questions.map(q => q.word);
+      updateProgress(p => ({
+        ...p,
+        learnedWords: [...new Set([...p.learnedWords, ...lessonWords])],
+      }));
+    }
+  };
+
+  if (finished) {
+    return (
+      <div className="p-6 max-w-md mx-auto text-center">
+        <h2 className="text-2xl font-bold mb-4">🎉 انتهى الدرس!</h2>
+        <p className="text-lg">الإجابات الصحيحة: {score} من {questions.length}</p>
+        <p className="text-lg">+{score * 10} نقطة خبرة</p>
+        <button
+          onClick={() => router.push(`/path/${lang}`)}
+          className="mt-6 bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg"
+        >
+          العودة إلى المسار
+        </button>
+      </div>
+    );
+  }
+
+  if (questions.length === 0) {
+    return <div className="p-6 text-center">جاري تحميل الدرس...</div>;
+  }
+
+  const currentQ = questions[currentIndex];
+  return (
+    <div className="p-4 max-w-md mx-auto">
+      <div className="flex justify-between mb-4">
+        <span>❤️ {progress.hearts}</span>
+        <span>XP {progress.xp}</span>
+        <span>المستوى {progress.level}</span>
+      </div>
+      <Exercise
+        word={currentQ.word}
+        correctTranslation={currentQ.correctTranslation}
+        options={currentQ.options}
+        onAnswer={handleAnswer}
+      />
+      <p className="text-center text-sm text-gray-500 mt-4">{currentIndex+1} / {questions.length}</p>
+    </div>
+  );
+}
+
+// ============================================================
+// File: components/Exercise.tsx
+// ============================================================
+'use client';
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+
+interface ExerciseProps {
+  word: string;
+  correctTranslation: string;
+  options: string[];
+  onAnswer: (isCorrect: boolean) => void;
+}
+
+export default function Exercise({ word, correctTranslation, options, onAnswer }: ExerciseProps) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const [shuffled, setShuffled] = useState<string[]>([]);
+
+  useEffect(() => {
+    setShuffled([...options].sort(() => Math.random() - 0.5));
+    setSelected(null);
+  }, [word, options]);
+
+  const handleSelect = (choice: string) => {
+    if (selected) return;
+    setSelected(choice);
+    const isCorrect = choice === correctTranslation;
+    onAnswer(isCorrect);
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white p-6 rounded-2xl shadow-xl">
+      <h2 className="text-xl font-bold text-center mb-2">اختر الترجمة الصحيحة</h2>
+      <div className="text-3xl font-arabic text-center mb-6">{word}</div>
+      <div className="grid grid-cols-2 gap-3">
+        {shuffled.map((opt) => (
+          <button
+            key={opt}
+            onClick={() => handleSelect(opt)}
+            className={`p-3 rounded-xl text-lg font-medium transition ${
+              selected === opt
+                ? opt === correctTranslation
+                  ? 'bg-green-500 text-white'
+                  : 'bg-red-500 text-white'
+                : 'bg-gray-100 hover:bg-gray-200'
+            }`}
+            disabled={!!selected}
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+// ============================================================
+// نصائح إضافية (مدمجة هنا)
+// ============================================================
+/*
+  1. لتوسيع المعجم إلى 2 مليون كلمة، استخدم Wiktionary API كما في lib/dictionary.ts،
+     ويمكنك إضافة مصادر أخرى مثل FreeDictionary API.
+  2. استخدم IndexedDB بدلاً من localStorage إذا زاد حجم البيانات.
+  3. استخدم Web Speech API لإضافة النطق الصوتي للكلمات.
+  4. أضف نظام استعادة القلوب تلقائياً كل 6 ساعات (احسب الوقت في UserContext).
+  5. احرص على تحسين خوارزمية التمارين لتكرار الكلمات التي يخطئ فيها المستخدم.
+  6. يمكنك إضافة شارات مثل: 'أول درس', '10 دروس', '100 كلمة'، وافتحها عند تحقيق الشروط.
+  7. استخدم Framer Motion للانتقالات السلسة بين الدروس والأسئلة.
+  8. تأكد من دعم RTL للعربية في globals.css.
+  9. يمكنك تصدير تقدم المستخدم كـ JSON واستيراده مرة أخرى.
+  10. استخدم Vercel Analytics لمراقبة الأداء.
+*/
